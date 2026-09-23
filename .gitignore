@@ -1,12 +1,8 @@
+# Só a pasta vigia/ vai para o repositório
+Estudo de caso/
+*.zip
+
+# Ambientes e segredos
+.venv/
 .env
 __pycache__/
-*.pyc
-.venv/
-*.egg-info/
-.pytest_cache/
-.ruff_cache/
-data/snapshots/*
-!data/snapshots/.gitkeep
-data/faces/
-*.pt
-*.onnx

@@ -1,0 +1,45 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "vigia run (webcam)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "vigia.cli",
+      "args": ["run", "-v"],
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": true
+    },
+    {
+      "name": "vigia run (vídeo de teste)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "vigia.cli",
+      "args": ["run", "-s", "${input:videoPath}", "-v"],
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "vigia zones",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "vigia.cli",
+      "args": ["zones"],
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "pytest",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q"]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "videoPath",
+      "type": "promptString",
+      "description": "Caminho do vídeo",
+      "default": "data/videos/pessoa_parada.mp4"
+    }
+  ]
+}

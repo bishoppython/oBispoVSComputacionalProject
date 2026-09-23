@@ -1,0 +1,7 @@
+# Coordenadas normalizadas (0..1) -> independem da resolução.
+# Gere/edite visualmente com:  vigia zones
+zones:
+  - name: portao
+    kind: loitering
+    threshold_s: 60
+    polygon: [[0.05, 0.45], [0.45, 0.45], [0.45, 0.98], [0.05, 0.98]]

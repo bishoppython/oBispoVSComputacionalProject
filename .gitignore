@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+data/snapshots/*
+!data/snapshots/.gitkeep
+data/faces/
+*.pt
+*.onnx

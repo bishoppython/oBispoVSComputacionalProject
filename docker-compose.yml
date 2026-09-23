@@ -1,0 +1,18 @@
+# Serviços de apoio. O pipeline roda no host (GPU) durante o desenvolvimento.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: vigia-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vigia
+      POSTGRES_PASSWORD: vigia
+      POSTGRES_DB: vigia
+    ports:
+      - "5433:5432"
+    volumes:
+      - vigia_pg:/var/lib/postgresql/data
+    profiles: ["face"]   # sobe só na fase 2:  docker compose --profile face up -d
+
+volumes:
+  vigia_pg:

@@ -16,7 +16,7 @@ Legenda: `[x]` feito · `[ ]` a fazer. Cada fase tem critério de aceite.
 - [x] Telegram com foto anotada (thread + fila + retentativas)
 - [ ] Gravar vídeos de teste (`data/videos/`) com: passagem normal, pessoa parada, oclusão
 - [ ] Calibrar `threshold_s`, `grace_period_s` e `conf` com esses vídeos
-- [ ] Fallback de **ocupação de zona**: alertar quando a zona fica ocupada continuamente
+- [x] Fallback de **ocupação de zona**: alertar quando a zona fica ocupada continuamente
       por qualquer pessoa > limiar (resolve troca de ID do tracker)
 - [ ] Horário de funcionamento por zona (ex.: só alertar entre 22h e 6h)
 - [ ] Salvar clipe curto (ex.: 5 s antes + 5 s depois) junto do snapshot

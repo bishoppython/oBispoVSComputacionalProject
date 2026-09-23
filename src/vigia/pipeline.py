@@ -14,6 +14,7 @@ from vigia.events.models import Event
 from vigia.events.sinks import LogSink, SnapshotSink
 from vigia.notify.telegram import TelegramClient, TelegramNotifier
 from vigia.rules.loitering import LoiteringTracker
+from vigia.rules.occupancy import OccupancyTracker
 from vigia.rules.zones import load_zones
 from vigia.video.source import VideoSource, resize_to_width
 from vigia.viz.overlay import draw_detections, draw_hud, draw_zones
@@ -29,10 +30,20 @@ class Pipeline:
         self.detector = Detector(cfg.detector)
         self.zones = load_zones(cfg.zones_file)
         self.loiter_zones = [z for z in self.zones if z.kind == "loitering"]
+        thresholds = {z.name: z.threshold_s for z in self.loiter_zones if z.threshold_s}
         self.loitering = LoiteringTracker(
-            thresholds={z.name: z.threshold_s for z in self.loiter_zones if z.threshold_s},
+            thresholds=thresholds,
             default_threshold_s=cfg.loitering.default_threshold_s,
             grace_period_s=cfg.loitering.grace_period_s,
+        )
+        self.occupancy = (
+            OccupancyTracker(
+                thresholds=thresholds,
+                default_threshold_s=cfg.loitering.default_threshold_s,
+                grace_period_s=cfg.loitering.grace_period_s,
+            )
+            if cfg.loitering.occupancy_fallback
+            else None
         )
         self.engine = EventEngine(self._build_sinks(secrets), cfg.events.cooldown_s)
         if not self.zones:
@@ -74,6 +85,39 @@ class Pipeline:
                 )
             )
 
+    def _occupancy_step(self, frame, dets: list[Detection], now: float) -> None:
+        """Fallback da permanência: conta pessoas na zona, com ou sem track_id.
+
+        Emite com kind="loitering" de propósito: a chave de cooldown é a mesma do
+        alerta por track, então a mesma situação nunca gera dois alertas.
+        """
+        if self.occupancy is None:
+            return
+        h, w = frame.shape[:2]
+        people = [d for d in dets if d.cls_name == "person"]
+        inside = {
+            z.name: [d for d in people if z.contains(d.anchor, w, h)] for z in self.loiter_zones
+        }
+        counts = {name: len(ds) for name, ds in inside.items()}
+        for hit in self.occupancy.update(counts, now):
+            in_zone = inside.get(hit.zone, [])
+            snap = draw_zones(frame.copy(), self.zones)
+            snap = draw_detections(
+                snap, dets, highlight={d.track_id for d in in_zone if d.track_id is not None}
+            )
+            self.engine.emit(
+                Event(
+                    kind="loitering",
+                    camera_id=self.cfg.camera.id,
+                    zone=hit.zone,
+                    bbox=in_zone[0].xyxy if in_zone else None,
+                    severity="alerta",
+                    message=f"Zona '{hit.zone}' ocupada continuamente há {hit.occupied_s:.0f}s.",
+                    frame=snap,
+                    meta={"occupied_s": hit.occupied_s, "source": "occupancy"},
+                )
+            )
+
     def _dwell_labels(self, dets: list[Detection]) -> dict[int, str]:
         labels: dict[int, str] = {}
         for d in dets:
@@ -102,6 +146,7 @@ class Pipeline:
                 dets = self.detector.track(frame)
 
                 self._loitering_step(frame, dets, ts)
+                self._occupancy_step(frame, dets, ts)
                 # fase 2: self._face_step(...)   fase 3: self._door_step / _vehicle_step
 
                 now = time.monotonic()

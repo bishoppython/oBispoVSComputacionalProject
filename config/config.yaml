@@ -21,6 +21,7 @@ zones_file: config/zones.yaml
 loitering:
   default_threshold_s: 90
   grace_period_s: 4        # tolera sumiços curtos do track sem zerar o cronômetro
+  occupancy_fallback: true # alerta também se a zona fica ocupada (qualquer ID) além do limiar
 
 events:
   cooldown_s: 120          # evita spam do mesmo tipo de alerta na mesma zona

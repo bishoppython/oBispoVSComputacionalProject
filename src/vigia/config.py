@@ -38,6 +38,9 @@ class DetectorCfg(BaseModel):
 class LoiteringCfg(BaseModel):
     default_threshold_s: float = 90.0
     grace_period_s: float = 4.0
+    # Fallback: alerta se a zona fica ocupada por qualquer pessoa além do limiar
+    # (resolve troca de ID do tracker). Usa os mesmos limiares e período de graça.
+    occupancy_fallback: bool = True
 
 
 class EventsCfg(BaseModel):

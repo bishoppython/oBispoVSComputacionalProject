@@ -21,7 +21,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-face = ["insightface>=0.7.3", "onnxruntime-gpu>=1.17", "psycopg[binary]>=3.1", "pgvector>=0.2.5"]
+# Nitro. Depois de instalar: pip uninstall -y onnxruntime (o insightface puxa a versão CPU,
+# que conflita com a -gpu) e pip install --force-reinstall --no-deps onnxruntime-gpu
+face = ["insightface>=0.7.3", "onnxruntime-gpu>=1.20"]
 hub = ["fastapi>=0.115", "uvicorn>=0.30", "python-multipart>=0.0.9", "fpdf2>=2.8"]
 dev = ["pytest>=8.0", "ruff>=0.4"]
 

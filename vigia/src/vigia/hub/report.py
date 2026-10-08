@@ -22,7 +22,10 @@ KIND_LABEL = {
     "door": "Porta",
     "vehicle": "Moto",
     "violence": "Violência",
-    "face_known": "Rosto conhecido",
+    "face_known": "Identificação",
+    "face_unknown": "Desconhecido",
+    "sensitive_zone": "Zona sensível",
+    "unidentified": "Não identificado",
 }
 SEVERITY_LABEL = {"info": "Info", "alerta": "Alerta", "critico": "Crítico"}
 PERIODS = [("Madrugada (0h-6h)", 0, 6), ("Manhã (6h-12h)", 6, 12),

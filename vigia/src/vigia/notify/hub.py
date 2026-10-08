@@ -34,6 +34,7 @@ def event_to_payload(event: Event, event_id: str) -> dict:
         "severity": event.severity,
         "zone": event.zone,
         "track_id": event.track_id,
+        "subject": event.subject,
         "bbox": list(event.bbox) if event.bbox else None,
         "timestamp": event.timestamp,
         "meta": json.loads(json.dumps(event.meta, default=str)),
@@ -56,6 +57,31 @@ class HubClient:
     def post_heartbeat(self, status: dict) -> None:
         r = self._http.post("/heartbeat", json=status)
         r.raise_for_status()
+
+    def get_json(self, path: str) -> dict:
+        r = self._http.get(path)
+        r.raise_for_status()
+        return r.json()
+
+    def get_bytes(self, path: str) -> bytes:
+        r = self._http.get(path)
+        r.raise_for_status()
+        return r.content
+
+    def post_json(self, path: str, data: dict) -> dict:
+        r = self._http.post(path, json=data)
+        r.raise_for_status()
+        return r.json()
+
+    def delete(self, path: str) -> None:
+        self._http.delete(path).raise_for_status()
+
+    def post_files(self, path: str, files: list[tuple[str, bytes]]) -> dict:
+        r = self._http.post(
+            path, files=[("files", (name, content, "image/jpeg")) for name, content in files]
+        )
+        r.raise_for_status()
+        return r.json()
 
     def close(self) -> None:
         self._http.close()

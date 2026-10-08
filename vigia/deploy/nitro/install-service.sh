@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Instala o `vigia run` como serviço systemd do usuário no nó de inferência (Nitro).
 # Sobe no boot (linger), reinicia se cair e para com SIGINT (esvazia a outbox ao sair).
-#   bash deploy/nitro/install-service.sh            # instala/atualiza e inicia
-#   bash deploy/nitro/install-service.sh --remove   # remove
+#   bash deploy/nitro/install-service.sh                      # config/config.yaml
+#   bash deploy/nitro/install-service.sh config/quarto.yaml   # outro perfil
+#   bash deploy/nitro/install-service.sh --remove             # remove
 set -euo pipefail
 
 UNIT=vigia.service
@@ -18,6 +19,8 @@ if [[ "${1:-}" == "--remove" ]]; then
   exit 0
 fi
 
+CONFIG="${1:-config/config.yaml}"
+[[ -f "$PROJECT/$CONFIG" ]] || { echo "Não achei $PROJECT/$CONFIG"; exit 1; }
 [[ -x "$VIGIA" ]] || { echo "Não achei $VIGIA (rode: make install)"; exit 1; }
 [[ -f "$PROJECT/.env" ]] || { echo "Falta $PROJECT/.env"; exit 1; }
 
@@ -30,7 +33,7 @@ After=default.target
 [Service]
 Type=simple
 WorkingDirectory=$PROJECT
-ExecStart="$VIGIA" run --no-window
+ExecStart="$VIGIA" run --no-window -c "$CONFIG"
 # Ctrl+C "de verdade": o pipeline fecha os sinks e tenta esvaziar a outbox.
 KillSignal=SIGINT
 TimeoutStopSec=30
@@ -48,4 +51,4 @@ loginctl enable-linger "$USER"
 systemctl --user daemon-reload
 systemctl --user enable --now "$UNIT"
 systemctl --user restart "$UNIT"   # aplica mudanças se já estava rodando
-echo "Serviço ativo. Logs: journalctl --user -u vigia -f"
+echo "Serviço ativo com $CONFIG. Logs: journalctl --user -u vigia -f"

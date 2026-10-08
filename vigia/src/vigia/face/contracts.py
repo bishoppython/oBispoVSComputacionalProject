@@ -1,7 +1,7 @@
-"""Contratos da fase 2 — implementação fica para o Claude Code / você.
+"""Contratos da fase 2 (reconhecimento facial).
 
-Plano: InsightFace `buffalo_l` (SCRFD + ArcFace 512-d) + PostgreSQL/pgvector.
-Veja docs/ROADMAP.md, fase 2.
+Implementações: `encoder.InsightFaceEncoder` (`buffalo_l`: SCRFD + ArcFace 512-d) e
+`gallery.MemoryGallery` (busca exata por cosseno; poucas pessoas dispensam pgvector).
 """
 
 from __future__ import annotations

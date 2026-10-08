@@ -1,7 +1,7 @@
 camera:
   id: frente
   # 0 = webcam | caminho de vídeo (.mp4) para testes | URL RTSP
-  # Câmera do homelab: VIGIA_CAMERA_SOURCE=rtsp://192.168.1.108:8554/frente no .env
+  # Câmera do homelab: VIGIA_CAMERA_SOURCE=rtsp://vigia:SENHA@192.168.1.108:8554/cam1 no .env
   source: 0
   # Stream de maior resolução só para snapshots (fase 5, VIGI stream1). null = usa o próprio frame.
   snapshot_source: null

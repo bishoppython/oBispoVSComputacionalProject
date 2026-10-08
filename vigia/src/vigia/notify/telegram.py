@@ -68,10 +68,22 @@ def encode_jpeg(image: np.ndarray, quality: int = 85) -> bytes:
     return buf.tobytes()
 
 
+EVENT_TITLES = {
+    "face_unknown": "Pessoa desconhecida",
+    "sensitive_zone": "Desconhecido em zona sensível",
+    "unidentified": "Pessoa não identificada",
+    "face_known": "Pessoa identificada",
+}
+
+
+def event_title(event: Event) -> str:
+    return EVENT_TITLES.get(event.kind, "Alerta de suspeito")
+
+
 def format_caption(event: Event) -> str:
     when = datetime.fromtimestamp(event.timestamp).strftime("%d/%m/%Y %H:%M:%S")
     lines = [
-        f"{SEVERITY_ICON[event.severity]} <b>Alerta de suspeito</b>",
+        f"{SEVERITY_ICON[event.severity]} <b>{html.escape(event_title(event))}</b>",
         html.escape(event.message),
         "",
         f"📷 {html.escape(event.camera_id)}"

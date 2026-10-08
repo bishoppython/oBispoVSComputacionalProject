@@ -17,6 +17,7 @@ from vigia.notify.telegram import TelegramClient, TelegramNotifier
 from vigia.rules.loitering import LoiteringTracker
 from vigia.rules.occupancy import OccupancyTracker
 from vigia.rules.zones import load_zones
+from vigia.video.publisher import LivePublisher
 from vigia.video.source import VideoSource, resize_to_width
 from vigia.viz.overlay import draw_detections, draw_hud, draw_zones
 
@@ -49,7 +50,19 @@ class Pipeline:
             if cfg.loitering.occupancy_fallback
             else None
         )
-        self.engine = EventEngine(self._build_sinks(secrets), cfg.events.cooldown_s)
+        self.engine = EventEngine(
+            self._build_sinks(secrets),
+            cfg.events.cooldown_s,
+            cooldown_by_kind=cfg.events.cooldown_by_kind,
+        )
+        self.faces, self.face_sync = self._build_faces(secrets)
+        self.live = (
+            LivePublisher(secrets.vigia_live_url, cfg.live.fps, cfg.live.encoder, cfg.live.bitrate)
+            if cfg.live.enabled and secrets.vigia_live_url
+            else None
+        )
+        if cfg.live.enabled and not secrets.vigia_live_url:
+            log.warning("Vídeo ao vivo habilitado, mas VIGIA_LIVE_URL ausente no .env")
         if not self.zones:
             log.warning("Nenhuma zona em %s — rode `vigia zones` para criar.", cfg.zones_file)
 
@@ -77,6 +90,50 @@ class Pipeline:
             else:
                 log.warning("Hub habilitado, mas VIGIA_HUB_TOKEN ausente no .env")
         return sinks
+
+    def _build_faces(self, secrets: Secrets):
+        """Reconhecimento facial: precisa do hub (é de lá que vem a galeria)."""
+        if not self.cfg.face.enabled:
+            return None, None
+        if not (self.cfg.hub.enabled and secrets.vigia_hub_token):
+            log.warning("Reconhecimento facial precisa do hub (hub.enabled + VIGIA_HUB_TOKEN).")
+            return None, None
+        from vigia.face.encoder import InsightFaceEncoder
+        from vigia.face.quality import QualityCfg
+        from vigia.face.sync import GallerySync
+        from vigia.face.watcher import FaceWatcher
+        from vigia.rules.identity import IdentityCfg, IdentityTracker
+
+        fc = self.cfg.face
+        encoder = InsightFaceEncoder(
+            fc.model,
+            fc.det_size,
+            fc.device,
+            QualityCfg(min_face_px=fc.min_face_px, min_frontal=fc.min_frontal),
+        )
+        identity = IdentityTracker(
+            IdentityCfg(
+                match_threshold=fc.match_threshold,
+                unknown_threshold=fc.unknown_threshold,
+                known_votes=fc.known_votes,
+                unknown_votes=fc.unknown_votes,
+                unidentified_after_s=fc.unidentified_after_s,
+            )
+        )
+        watcher = FaceWatcher(fc, self.cfg.camera.id, self.zones, encoder, identity)
+        hub = HubClient(self.cfg.hub.url, secrets.vigia_hub_token, self.cfg.hub.timeout_s)
+        sync = GallerySync(hub, encoder, fc.cache_path, watcher.set_gallery, fc.sync_interval_s)
+        return watcher, sync
+
+    def _face_step(self, frame, dets: list[Detection], now: float) -> None:
+        if self.faces is None:
+            return
+        for event in self.faces.step(frame, dets, now):
+            labels, colors, highlight = self.faces.overlay(dets)
+            highlight = highlight | ({event.track_id} if event.severity != "info" else set())
+            snap = draw_zones(frame.copy(), self.zones)
+            event.frame = draw_detections(snap, dets, labels, highlight, colors)
+            self.engine.emit(event)
 
     def status(self) -> dict:
         """Estado enviado no heartbeat ao hub."""
@@ -157,10 +214,26 @@ class Pipeline:
                     labels[d.track_id] = f"{t:.0f}s/{self.loitering.threshold(z.name):.0f}s"
         return labels
 
+    def _annotate(self, frame, dets: list[Detection]):
+        """Frame com zonas, caixas, cronômetros e identidades (janela e vídeo ao vivo)."""
+        labels = self._dwell_labels(dets)
+        colors: dict = {}
+        highlight: set = set()
+        if self.faces is not None:
+            face_labels, colors, highlight = self.faces.overlay(dets)
+            for tid, text in face_labels.items():
+                labels[tid] = f"{text} {labels[tid]}" if tid in labels else text
+        view = draw_zones(frame.copy(), self.zones)
+        return draw_detections(view, dets, labels, highlight, colors)
+
     # ------------------------------------------------------------------
     def run(self) -> None:
         show = self.cfg.display.show_window
         self.source.start()
+        if self.face_sync:
+            self.face_sync.start()
+        if self.live:
+            self.live.start()
         last = time.monotonic()
         log.info("Pipeline iniciado (q para sair).")
         try:
@@ -176,21 +249,28 @@ class Pipeline:
 
                 self._loitering_step(frame, dets, ts)
                 self._occupancy_step(frame, dets, ts)
-                # fase 2: self._face_step(...)   fase 3: self._door_step / _vehicle_step
+                self._face_step(frame, dets, ts)
+                # fase 3: self._door_step / _vehicle_step
 
                 now = time.monotonic()
                 self._fps = 0.9 * self._fps + 0.1 * (1.0 / max(now - last, 1e-6))
                 last = now
 
-                if show:
-                    view = draw_zones(frame, self.zones)
-                    view = draw_detections(view, dets, labels=self._dwell_labels(dets))
-                    cv2.imshow(WINDOW, draw_hud(view, self._fps, self.cfg.camera.id))
-                    if cv2.waitKey(1) & 0xFF == ord("q"):
-                        break
+                if show or self.live:
+                    view = draw_hud(self._annotate(frame, dets), self._fps, self.cfg.camera.id)
+                    if self.live:
+                        self.live.publish(view)
+                    if show:
+                        cv2.imshow(WINDOW, view)
+                        if cv2.waitKey(1) & 0xFF == ord("q"):
+                            break
         except KeyboardInterrupt:
             log.info("Interrompido pelo usuário.")
         finally:
+            if self.face_sync:
+                self.face_sync.stop()
+            if self.live:
+                self.live.stop()
             self.source.stop()
             self.engine.close()
             if show:

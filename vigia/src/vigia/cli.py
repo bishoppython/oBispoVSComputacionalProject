@@ -136,16 +136,88 @@ def hub(
     import uvicorn
 
     from vigia.hub.app import create_app
+    from vigia.hub.live import LiveRelay, capture_frames
     from vigia.hub.service import build_hub
     from vigia.hub.settings import HubSettings
 
     settings = HubSettings()
+    raw_url = settings.rtsp_url(settings.hub_camera_path)
+    live = {
+        "vigia": LiveRelay(settings.rtsp_url(settings.hub_live_path), "anotado"),
+        "raw": LiveRelay(raw_url, "camera"),
+    }
+    app_ = create_app(
+        build_hub(settings),
+        settings.vigia_hub_token,
+        panel_password=settings.hub_panel_password,
+        live=live,
+        capture=lambda count, interval: capture_frames(raw_url, count, interval),
+    )
+    if not settings.hub_panel_password:
+        logging.getLogger(__name__).warning("Painel desativado: defina HUB_PANEL_PASSWORD.")
     uvicorn.run(
-        create_app(build_hub(settings), settings.vigia_hub_token),
+        app_,
         host=host,
         port=port,
         log_config=None,  # usa o RichHandler já configurado
     )
+
+
+faces_app = typer.Typer(help="Cadastro de rostos (as fotos ficam no hub; a Nitro processa).")
+app.add_typer(faces_app, name="faces")
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+NAME = typer.Argument(..., help="Nome da pessoa")
+FOLDER = typer.Argument(..., exists=True, file_okay=False, help="Pasta com as fotos")
+
+
+def _hub(config: Path):
+    from vigia.notify.hub import HubClient
+
+    cfg, secrets = load_config(config)
+    if not secrets.vigia_hub_token:
+        raise typer.Exit("Defina VIGIA_HUB_TOKEN no .env")
+    return HubClient(cfg.hub.url, secrets.vigia_hub_token, timeout=60)
+
+
+@faces_app.command("add")
+def faces_add(
+    name: str = NAME,
+    folder: Path = FOLDER,
+    config: Path = CONFIG,
+) -> None:
+    """Envia as fotos de uma pasta para o cadastro de NOME (cria a pessoa se precisar)."""
+    photos = sorted(p for p in folder.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
+    if not photos:
+        raise typer.Exit(f"Nenhuma imagem em {folder}")
+    hub = _hub(config)
+    person = hub.post_json("/api/people", {"name": name})
+    added = 0
+    for i in range(0, len(photos), 20):
+        batch = [(p.name, p.read_bytes()) for p in photos[i : i + 20]]
+        added += len(hub.post_files(f"/api/people/{person['id']}/photos", batch)["added"])
+    typer.echo(f"{added} foto(s) enviada(s) para {person['name']}. A Nitro processa em até 30 s.")
+
+
+@faces_app.command("list")
+def faces_list(config: Path = CONFIG) -> None:
+    """Lista as pessoas cadastradas e o estado das fotos."""
+    for p in _hub(config).get_json("/api/people")["people"]:
+        st = [f["status"] for f in p["photos"]]
+        typer.echo(
+            f"{p['name']}: {st.count('ok')} ok, {st.count('pending')} pendente(s), "
+            f"{st.count('sem_rosto')} sem rosto"
+        )
+
+
+@faces_app.command("remove")
+def faces_remove(name: str = NAME, config: Path = CONFIG) -> None:
+    """Apaga a pessoa e todas as fotos dela (no hub e, na próxima sincronização, na Nitro)."""
+    hub = _hub(config)
+    match = [p for p in hub.get_json("/api/people")["people"] if p["name"] == name]
+    if not match:
+        raise typer.Exit(f"{name} não está cadastrado(a)")
+    hub.delete(f"/api/people/{match[0]['id']}")
+    typer.echo(f"{name} removido(a).")
 
 
 if __name__ == "__main__":

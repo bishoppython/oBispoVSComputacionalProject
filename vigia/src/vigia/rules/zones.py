@@ -9,7 +9,9 @@ import cv2
 import numpy as np
 import yaml
 
-ZONE_KINDS = {"loitering", "door", "vehicle"}  # door/vehicle entram na fase 3
+# entrance: porta por onde se entra (marca "entrou"); sensitive: área sensível (ex.: cama).
+# door/vehicle entram na fase 3.
+ZONE_KINDS = {"loitering", "entrance", "sensitive", "door", "vehicle"}
 
 
 @dataclass

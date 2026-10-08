@@ -8,7 +8,13 @@ import numpy as np
 from vigia.detection.detector import Detection
 from vigia.rules.zones import Zone
 
-ZONE_COLORS = {"loitering": (0, 200, 255), "door": (255, 120, 0), "vehicle": (200, 0, 200)}
+ZONE_COLORS = {
+    "loitering": (0, 200, 255),
+    "entrance": (255, 200, 0),
+    "sensitive": (180, 80, 255),
+    "door": (255, 120, 0),
+    "vehicle": (200, 0, 200),
+}
 PERSON = (60, 220, 60)
 ALERT = (0, 0, 255)
 OTHER = (200, 200, 200)
@@ -41,13 +47,16 @@ def draw_detections(
     detections: list[Detection],
     labels: dict[int, str] | None = None,
     highlight: set[int] | None = None,
+    colors: dict[int, tuple[int, int, int]] | None = None,
 ) -> np.ndarray:
     labels = labels or {}
     highlight = highlight or set()
+    colors = colors or {}
     for d in detections:
         x1, y1, x2, y2 = d.xyxy
         is_alert = d.track_id in highlight
         color = ALERT if is_alert else (PERSON if d.cls_name == "person" else OTHER)
+        color = colors.get(d.track_id, color) if not is_alert else color
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3 if is_alert else 2)
         text = f"{d.cls_name} #{d.track_id}" if d.track_id is not None else d.cls_name
         if d.track_id in labels:

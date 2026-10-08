@@ -11,7 +11,7 @@ from urllib.parse import quote
 import httpx
 
 from vigia.events.models import SEVERITY_ICON, Event
-from vigia.notify.telegram import TelegramClient, format_caption
+from vigia.notify.telegram import TelegramClient, event_title, format_caption
 
 
 class Channel(Protocol):
@@ -50,7 +50,7 @@ def format_whatsapp(event: Event) -> str:
     """Mesma legenda do Telegram, na marcação do WhatsApp (*negrito*, _itálico_)."""
     when = datetime.fromtimestamp(event.timestamp).strftime("%d/%m/%Y %H:%M:%S")
     lines = [
-        f"{SEVERITY_ICON[event.severity]} *Alerta de suspeito*",
+        f"{SEVERITY_ICON[event.severity]} *{event_title(event)}*",
         event.message,
         "",
         f"📷 {event.camera_id}" + (f" · zona _{event.zone}_" if event.zone else ""),

@@ -1,0 +1,60 @@
+# Perfil de teste: quarto (porta = entrada, cama = zona sensível) + reconhecimento facial.
+#   vigia run -c config/quarto.yaml        (o serviço da Nitro usa este arquivo)
+# Fonte: VIGIA_CAMERA_SOURCE=rtsp://vigia:SENHA@192.168.1.108:8554/cam1 no .env
+camera:
+  id: quarto
+  source: 0
+  snapshot_source: null
+  width: 1280
+  reconnect_seconds: 5
+
+detector:
+  model: yolo11n.pt
+  conf: 0.4
+  device: 0
+  imgsz: 640
+  tracker: bytetrack.yaml
+  classes: [person]
+
+zones_file: config/zones_quarto.yaml   # redesenhe com: vigia zones -c config/quarto.yaml
+
+face:
+  enabled: true
+  match_threshold: 0.45      # >= isso: é a pessoa cadastrada
+  unknown_threshold: 0.30    # < isso (rosto bom e de frente): voto de desconhecido
+  known_votes: 3             # leituras do mesmo nome para confirmar
+  unknown_votes: 5           # leituras "desconhecido" (sem nenhum acerto) para alarmar
+  unidentified_after_s: 20   # pessoa sem rosto reconhecível -> alerta leve (sem sirene)
+  min_face_px: 40            # rosto menor que isso não vota (longe demais)
+  alarm_on_unknown: true
+
+live:
+  enabled: true              # vídeo anotado para o painel (VIGIA_LIVE_URL no .env)
+  fps: 15
+  encoder: h264_nvenc
+
+loitering:
+  default_threshold_s: 90
+  grace_period_s: 4
+  occupancy_fallback: false  # o quarto não tem zona de permanência
+
+events:
+  cooldown_s: 120
+  cooldown_by_kind:
+    face_known: 1800         # "Ana entrou no quarto" no máximo a cada 30 min
+    face_unknown: 60
+    sensitive_zone: 60
+    unidentified: 300
+  snapshot_dir: data/snapshots
+
+telegram:
+  enabled: false             # quem envia é o hub
+
+hub:
+  enabled: true
+  url: http://192.168.1.108:8090
+  heartbeat_s: 60
+  outbox_dir: data/outbox
+
+display:
+  show_window: false

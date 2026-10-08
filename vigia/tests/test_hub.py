@@ -237,3 +237,104 @@ def test_api_heartbeat_e_relatorio_manual(settings):
     r = client.post("/reports/monthly?month=2026-09", headers=AUTH)
     assert r.json()["month"] == "2026-09"
     assert client.post("/reports/monthly?month=2026-13", headers=AUTH).status_code == 422
+
+
+# ---- painel, cadastro, alarme ---------------------------------------------------
+def panel_client(settings, **kw):
+    hub, chans, clock = make_hub(settings)
+    app = create_app(hub, TOKEN, panel_password="senha-painel", **kw)
+    return TestClient(app), hub, chans
+
+
+def test_painel_exige_login_e_cookie_libera_api(settings):
+    client, _, _ = panel_client(settings)
+    assert client.get("/", follow_redirects=False).headers["location"] == "/login"
+    assert client.get("/api/state").status_code == 401
+    r = client.post("/login", data={"password": "errada"}, follow_redirects=False)
+    assert r.headers["location"] == "/login?erro=senha"
+    r = client.post("/login", data={"password": "senha-painel"}, follow_redirects=False)
+    assert r.headers["location"] == "/" and "vigia_sessao" in r.cookies
+    assert client.get("/api/state").json()["alarm"]["active"] is False
+    assert "Vigia" in client.get("/").text
+    client.cookies.set("vigia_sessao", "9999999999.assinatura-falsa")
+    assert client.get("/api/state").status_code == 401
+
+
+def test_cadastro_de_pessoa_upload_status_e_remocao(settings):
+    client, hub, _ = panel_client(settings)
+    pid = client.post("/api/people", json={"name": "  Ana   Maria "}, headers=AUTH).json()["id"]
+    files = [("files", ("a.jpg", jpeg(), "image/jpeg")), ("files", ("b.jpg", jpeg(), "image/jpeg"))]
+    added = client.post(f"/api/people/{pid}/photos", files=files, headers=AUTH).json()["added"]
+    bad = [("files", ("x.jpg", b"nao-e-imagem", "image/jpeg"))]
+    assert client.post(f"/api/people/{pid}/photos", files=bad, headers=AUTH).status_code == 422
+
+    [ana] = client.get("/api/faces/manifest", headers=AUTH).json()["people"]
+    assert ana["name"] == "Ana Maria" and [p["status"] for p in ana["photos"]] == ["pending"] * 2
+    r = client.post(f"/api/faces/photos/{added[0]}/status", json={"status": "ok"}, headers=AUTH)
+    assert r.status_code == 200
+    r = client.post(f"/api/faces/photos/{added[0]}/status", json={"status": "xx"}, headers=AUTH)
+    assert r.status_code == 422
+    assert client.get(f"/api/faces/photos/{added[0]}.jpg", headers=AUTH).content[:2] == b"\xff\xd8"
+
+    photo_file = hub.store.face_photo_path(added[1])
+    assert client.delete(f"/api/people/{pid}", headers=AUTH).status_code == 200
+    assert client.get("/api/people", headers=AUTH).json()["people"] == []
+    assert not photo_file.exists()  # biometria apagada do disco
+
+
+def test_captura_pela_camera(settings):
+    client, _, _ = panel_client(settings, capture=lambda count, interval: [jpeg()] * count)
+    pid = client.post("/api/people", json={"name": "Bia"}, headers=AUTH).json()["id"]
+    r = client.post(f"/api/people/{pid}/capture?count=3", headers=AUTH)
+    assert len(r.json()["added"]) == 3
+    assert client.post("/api/people/999/capture", headers=AUTH).status_code == 404
+
+
+def test_evento_com_alarme_dispara_e_info_nao_vai_para_os_canais(settings):
+    hub, chans, clock = make_hub(settings)
+    known = payload(1) | {"kind": "face_known", "severity": "info", "subject": "Ana"}
+    hub.ingest(known, None)
+    clock.t += 1
+    stranger = payload(2) | {"kind": "face_unknown", "severity": "critico", "meta": {"alarm": True}}
+    hub.ingest(stranger, jpeg())
+    hub.process_pending(sleep=lambda s: None)
+    assert [k for k, *_ in chans[0].sent] == ["alert"]  # só o desconhecido
+    assert hub.alarm.state()["active"] is True
+    hub.alarm.stop()
+    assert hub.alarm.state()["active"] is False
+    [last, first] = hub.store.recent(10)
+    assert first.subject == "Ana" and last.kind == "face_unknown"
+    assert hub.store.recent(10, since_received=last.received_at) == []
+
+
+def test_alarme_expira_sozinho(settings, tmp_path):
+    from vigia.hub.alarm import Alarm, siren_wav
+
+    clock = Clock(0)
+    alarm = Alarm(tmp_path, duration_s=30, play_sound=False, clock=clock)
+    alarm.trigger("x")
+    clock.t = 29
+    assert alarm.active
+    clock.t = 31
+    assert not alarm.active
+    assert siren_wav(0.5)[:4] == b"RIFF"
+
+
+def test_migracao_adiciona_coluna_subject(tmp_path):
+    import sqlite3
+
+    db = tmp_path / "vigia.db"
+    con = sqlite3.connect(db)
+    con.executescript(
+        "CREATE TABLE events (id TEXT PRIMARY KEY, timestamp REAL NOT NULL,"
+        " camera_id TEXT NOT NULL, kind TEXT NOT NULL, severity TEXT NOT NULL,"
+        " zone TEXT, track_id INTEGER,"
+        " message TEXT NOT NULL, meta TEXT NOT NULL, photo TEXT, received_at REAL NOT NULL);"
+        "INSERT INTO events VALUES ('a', 1, 'frente', 'loitering', 'alerta', NULL, NULL, 'x', '{}',"
+        " NULL, 1);"
+    )
+    con.commit()
+    con.close()
+    store = EventStore(tmp_path)
+    assert store.recent(5)[0].subject is None
+    assert store.add(payload(9) | {"subject": "Ana"}, None, 2).subject == "Ana"

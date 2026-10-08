@@ -56,3 +56,17 @@ def test_sink_quebrado_nao_derruba_os_outros():
     eng = EventEngine([Broken(), sink], cooldown_s=0, clock=FakeClock())
     eng.emit(ev())
     assert len(sink.events) == 1
+
+
+def test_cooldown_por_tipo_e_por_sujeito():
+    clock, sink = FakeClock(), Collector()
+    eng = EventEngine([sink], cooldown_s=60, clock=clock, cooldown_by_kind={"face_known": 1800})
+
+    def known(name):
+        return Event(kind="face_known", camera_id="quarto", message=name, subject=name)
+
+    assert eng.emit(known("Ana"))
+    assert eng.emit(known("Bia"))  # outra pessoa não é calada
+    clock.t = 600
+    assert not eng.emit(known("Ana"))  # 30 min para o mesmo nome
+    assert eng.emit(ev())  # outros tipos seguem o padrão

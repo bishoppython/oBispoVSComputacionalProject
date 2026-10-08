@@ -12,6 +12,7 @@ from datetime import datetime
 
 import httpx
 
+from vigia.hub.alarm import Alarm
 from vigia.hub.channels import Channel, EvolutionClient, TelegramChannel, WhatsAppChannel
 from vigia.hub.monitor import PresenceMonitor
 from vigia.hub.report import (
@@ -28,6 +29,7 @@ from vigia.notify.telegram import TelegramClient
 log = logging.getLogger(__name__)
 TICK_S = 30.0
 DAY_S = 86400.0
+SEVERITY_RANK = {"info": 0, "alerta": 1, "critico": 2}
 
 
 @dataclass
@@ -49,10 +51,12 @@ class Hub:
         camera_probe: Callable[[], bool] | None = None,
         clock: Callable[[], float] = time.time,
         retries: int = 3,
+        alarm: Alarm | None = None,
     ):
         self.settings = settings
         self.store = store
         self.channels = channels
+        self.alarm = alarm or Alarm(settings.hub_data_dir, play_sound=False, clock=clock)
         self.camera_probe = camera_probe
         self._clock = clock
         self.retries = retries
@@ -74,8 +78,12 @@ class Hub:
         ev = self.store.add(payload, photo, received_at=self._clock())
         if ev is None:
             return False
-        log.warning("Alerta recebido: [%s] %s", ev.kind, ev.message)
-        self._enqueue(_Job("alert", event=ev, photo=photo))
+        log.warning("Evento recebido: [%s] %s", ev.kind, ev.message)
+        if ev.meta.get("alarm"):
+            self.alarm.trigger(ev.message)
+        min_rank = SEVERITY_RANK.get(self.settings.hub_notify_min_severity, 1)
+        if SEVERITY_RANK.get(ev.severity, 1) >= min_rank:
+            self._enqueue(_Job("alert", event=ev, photo=photo))
         return True
 
     def heartbeat(self, status: dict) -> None:
@@ -137,7 +145,8 @@ class Hub:
             log.info("Retenção: %d evento(s) antigo(s) apagado(s).", n)
 
     def send_monthly_report(self, year: int, month: int) -> dict:
-        events = self.store.between(*month_bounds(year, month))
+        # O relatório é de ALERTAS: identificações (info) ficam só no painel.
+        events = [e for e in self.store.between(*month_bounds(year, month)) if e.severity != "info"]
         summary = summarize(events)
         pdf = build_report_pdf(events, year, month, self.store.read_photo)
         filename = f"vigia_relatorio_{year}-{month:02d}.pdf"
@@ -268,4 +277,14 @@ def build_hub(settings: HubSettings) -> Hub:
         if settings.hub_mediamtx_api
         else None
     )
-    return Hub(settings, EventStore(settings.hub_data_dir), channels, camera_probe=probe)
+    alarm = Alarm(
+        settings.hub_data_dir,
+        duration_s=settings.hub_alarm_duration_s,
+        device=settings.hub_alarm_device,
+        play_sound=settings.hub_alarm_sound,
+        volume=settings.hub_alarm_volume,
+        mixer=settings.hub_alarm_mixer,
+        card=settings.hub_alarm_card,
+    )
+    store = EventStore(settings.hub_data_dir)
+    return Hub(settings, store, channels, camera_probe=probe, alarm=alarm)

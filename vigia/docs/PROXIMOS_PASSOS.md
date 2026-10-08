@@ -1,7 +1,7 @@
 # Próximos passos — passagem de turno
 
 **Atualizado em:** 08/10/2026, ~14h45 (horário de Brasília)
-**Branch:** `feat/hub-homelab` — `556a6f6` (fase 1.5) e o commit da fase 2 logo em seguida; nada pendente, ainda não mesclado na `main`
+**Branch:** `main` — fases 1.5 e 2 mescladas pelo PR #1 (`f3f8cb1`); trabalhe a partir da `main`
 **Referência de operação:** [`OPERACAO.md`](OPERACAO.md) · **Checklist geral:** [`ROADMAP.md`](ROADMAP.md)
 
 ## Onde paramos
@@ -83,7 +83,6 @@ Alternativa: `vigia faces add "Nome" pasta/` com fotos nítidas de frente.
   `systemctl --user restart vigia`.
 
 ### 5. Pendências menores
-- [ ] Merge de `feat/hub-homelab` na `main` (e push) depois de validar no quarto.
 - [ ] **WhatsApp:** criar a instância `vigia` na Evolution API (http://192.168.1.108:8081/manager),
       parear o número novo, preencher `EVOLUTION_API_KEY` e `WHATSAPP_TO` no `.env`
       (dos dois lados ou usar `--exclude .env` no rsync), `up -d hub`, testar com `/notify/test`.

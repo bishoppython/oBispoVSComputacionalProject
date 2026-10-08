@@ -23,9 +23,11 @@ class EventEngine:
         sinks: list[EventSink],
         cooldown_s: float = 120.0,
         clock: Callable[[], float] = time.monotonic,
+        cooldown_by_kind: dict[str, float] | None = None,
     ):
         self.sinks = sinks
         self.cooldown_s = cooldown_s
+        self.cooldown_by_kind = cooldown_by_kind or {}
         self._clock = clock
         self._last_sent: dict[str, float] = {}
 
@@ -33,7 +35,8 @@ class EventEngine:
         """Retorna True se o evento foi despachado, False se caiu no cooldown."""
         now = self._clock()
         last = self._last_sent.get(event.dedup_key)
-        if last is not None and now - last < self.cooldown_s:
+        cooldown = self.cooldown_by_kind.get(event.kind, self.cooldown_s)
+        if last is not None and now - last < cooldown:
             log.debug("Evento suprimido (cooldown): %s", event.dedup_key)
             return False
         self._last_sent[event.dedup_key] = now

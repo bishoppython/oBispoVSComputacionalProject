@@ -39,13 +39,21 @@ class TelegramClient:
         r.raise_for_status()
 
     def send_photo(self, image: np.ndarray, caption: str) -> None:
-        ok, buf = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 85])
-        if not ok:
-            raise RuntimeError("Falha ao codificar JPEG")
+        self.send_photo_bytes(encode_jpeg(image), caption)
+
+    def send_photo_bytes(self, jpeg: bytes, caption: str) -> None:
         r = self._http.post(
             self._url("sendPhoto"),
             data={"chat_id": self.chat_id, "caption": caption[:1024], "parse_mode": "HTML"},
-            files={"photo": ("alerta.jpg", buf.tobytes(), "image/jpeg")},
+            files={"photo": ("alerta.jpg", jpeg, "image/jpeg")},
+        )
+        r.raise_for_status()
+
+    def send_document(self, content: bytes, filename: str, caption: str, mimetype: str) -> None:
+        r = self._http.post(
+            self._url("sendDocument"),
+            data={"chat_id": self.chat_id, "caption": caption[:1024], "parse_mode": "HTML"},
+            files={"document": (filename, content, mimetype)},
         )
         r.raise_for_status()
 
@@ -53,10 +61,29 @@ class TelegramClient:
         self._http.close()
 
 
+def encode_jpeg(image: np.ndarray, quality: int = 85) -> bytes:
+    ok, buf = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    if not ok:
+        raise RuntimeError("Falha ao codificar JPEG")
+    return buf.tobytes()
+
+
+EVENT_TITLES = {
+    "face_unknown": "Pessoa desconhecida",
+    "sensitive_zone": "Desconhecido em zona sensível",
+    "unidentified": "Pessoa não identificada",
+    "face_known": "Pessoa identificada",
+}
+
+
+def event_title(event: Event) -> str:
+    return EVENT_TITLES.get(event.kind, "Alerta de suspeito")
+
+
 def format_caption(event: Event) -> str:
     when = datetime.fromtimestamp(event.timestamp).strftime("%d/%m/%Y %H:%M:%S")
     lines = [
-        f"{SEVERITY_ICON[event.severity]} <b>Alerta de suspeito</b>",
+        f"{SEVERITY_ICON[event.severity]} <b>{html.escape(event_title(event))}</b>",
         html.escape(event.message),
         "",
         f"📷 {html.escape(event.camera_id)}"

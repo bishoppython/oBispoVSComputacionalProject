@@ -1,0 +1,49 @@
+# mediamtx: publica a webcam USB do homelab e recebe o vídeo anotado da Nitro.
+#   rtsp://<homelab>:8554/cam1        vídeo cru da webcam (a Nitro lê daqui)
+#   rtsp://<homelab>:8554/cam1-vigia  vídeo anotado publicado pela Nitro (o painel mostra)
+# __RTSP_USER__/__RTSP_PASS__ são trocados no início do container (VIGIA_RTSP_USER/PASS do .env).
+logLevel: info
+
+rtspAddress: :8554
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+
+api: yes
+apiAddress: :9997   # não é publicada no host; só o hub (rede do compose) acessa
+
+authInternalUsers:
+  # ffmpeg de dentro do container publica a webcam (e o próprio container lê).
+  - user: any
+    pass:
+    ips: ["127.0.0.1", "::1"]
+    permissions:
+      - action: publish
+        path: cam1
+      - action: read
+  # API só para a rede interna do Docker (o hub monitora a câmera por ela).
+  - user: any
+    pass:
+    ips: ["172.16.0.0/12"]
+    permissions:
+      - action: api
+  # Nitro e hub: leem com senha; só a Nitro publica o vídeo anotado.
+  - user: __RTSP_USER__
+    pass: __RTSP_PASS__
+    ips: []
+    permissions:
+      - action: read
+      - action: publish
+        path: cam1-vigia
+
+paths:
+  cam1:
+    # MJPEG 1280x720 da webcam -> H.264 leve (a análise na Nitro usa 1280 px de largura).
+    runOnInit: >-
+      ffmpeg -hide_banner -loglevel warning
+      -f v4l2 -input_format mjpeg -video_size 1280x720 -framerate 15 -i /dev/video0
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 30 -b:v 3M
+      -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+  cam1-vigia:

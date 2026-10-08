@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vigia · Painel</title>
+<style>
+  :root {
+    --bg:#0f1216; --card:#181d24; --card2:#1f252e; --line:#2a313b; --text:#e7ebf0; --muted:#8b95a3;
+    --accent:#3b82f6; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --info:#60a5fa;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button { font:inherit; color:inherit; background:var(--card2); border:1px solid var(--line); border-radius:8px; padding:7px 12px; cursor:pointer; }
+  button:hover { border-color:#3b4451; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.danger { color:#fca5a5; }
+  button:disabled { opacity:.55; cursor:wait; }
+  input[type=text] { font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:7px 10px; }
+
+  header { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line); background:var(--card); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:18px; margin:0 8px 0 0; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; flex:1; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; background:var(--card2); border:1px solid var(--line); color:var(--muted); font-size:13px; white-space:nowrap; }
+  .chip i { width:8px; height:8px; border-radius:50%; background:var(--muted); }
+  .chip.ok i { background:var(--ok); } .chip.bad i { background:var(--bad); } .chip.warn i { background:var(--warn); }
+  .chip.ok, .chip.bad, .chip.warn { color:var(--text); }
+  .tabs { display:flex; gap:4px; }
+  .tabs button[aria-selected=true] { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+  #alarm { display:none; align-items:center; gap:12px; padding:12px 16px; background:#7f1d1d; border-bottom:1px solid var(--bad); font-weight:600; animation:pulse 1s infinite alternate; }
+  #alarm.on { display:flex; }
+  #alarm span { flex:1; }
+  @keyframes pulse { from { background:#7f1d1d; } to { background:#b91c1c; } }
+
+  main { padding:16px; max-width:1400px; margin:0 auto; }
+  .live { display:grid; grid-template-columns:minmax(0, 1.6fr) minmax(300px, 1fr); gap:16px; }
+  @media (max-width: 900px) { .live { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .card-h { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line); }
+  .card-h h2 { font-size:14px; margin:0; flex:1; }
+  .seg { display:flex; } .seg button { border-radius:0; } .seg button:first-child { border-radius:8px 0 0 8px; } .seg button:last-child { border-radius:0 8px 8px 0; }
+  .seg button[aria-pressed=true] { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .video { position:relative; background:#000; aspect-ratio:16/9; }
+  .video img { width:100%; height:100%; object-fit:contain; display:block; }
+  .video .note { position:absolute; left:10px; bottom:10px; background:rgba(0,0,0,.65); padding:4px 8px; border-radius:6px; font-size:12px; color:#d1d5db; }
+  .legend { display:flex; flex-wrap:wrap; gap:14px; padding:10px 12px; color:var(--muted); font-size:12px; }
+  .legend b { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
+
+  #feed { max-height:calc(100vh - 210px); overflow:auto; }
+  @media (max-width: 900px) { #feed { max-height:none; } }
+  .ev { display:grid; grid-template-columns:96px 1fr; gap:10px; padding:10px 12px; border-bottom:1px solid var(--line); border-left:3px solid transparent; }
+  .ev.critico { border-left-color:var(--bad); } .ev.alerta { border-left-color:var(--warn); } .ev.info { border-left-color:var(--info); }
+  .ev img { width:96px; height:54px; object-fit:cover; border-radius:6px; background:#000; cursor:zoom-in; }
+  .ev .noimg { width:96px; height:54px; border-radius:6px; background:var(--card2); }
+  .ev .t { font-weight:600; } .ev .m { color:#cbd5e1; } .ev .w { color:var(--muted); font-size:12px; }
+  .empty { padding:24px; text-align:center; color:var(--muted); }
+
+  .people-top { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px; }
+  .help { color:var(--muted); margin:0 0 16px; max-width:900px; }
+  .people { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px; }
+  .person .card-h h2 { font-size:16px; }
+  .counts { color:var(--muted); font-size:12px; }
+  .actions { display:flex; flex-wrap:wrap; gap:6px; padding:10px 12px; }
+  .msg { padding:0 12px 10px; color:var(--warn); font-size:13px; min-height:0; }
+  .photos { display:grid; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:6px; padding:0 12px 12px; }
+  .ph { position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; background:#000; }
+  .ph img { width:100%; height:100%; object-fit:cover; }
+  .ph .st { position:absolute; left:4px; bottom:4px; font-size:11px; padding:1px 6px; border-radius:5px; background:rgba(0,0,0,.7); }
+  .ph .st.ok { color:var(--ok); } .ph .st.pending { color:var(--warn); } .ph .st.sem_rosto { color:var(--bad); }
+  .ph .x { position:absolute; right:3px; top:3px; padding:0 6px; line-height:20px; border-radius:6px; background:rgba(0,0,0,.7); border:0; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛡️ Vigia</h1>
+  <div class="chips">
+    <span class="chip" id="c-node"><i></i><span>Nitro…</span></span>
+    <span class="chip" id="c-cam"><i></i><span>Câmera…</span></span>
+    <span class="chip" id="c-gal"><i></i><span>Galeria…</span></span>
+    <span class="chip" id="c-ch"><i></i><span>Canais…</span></span>
+  </div>
+  <button id="sound" title="O navegador só toca som depois de um clique">🔕 Ativar som</button>
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="live">Ao vivo</button>
+    <button role="tab" aria-selected="false" data-tab="people">Pessoas</button>
+  </nav>
+  <form method="post" action="/logout"><button>Sair</button></form>
+</header>
+<div id="alarm" role="alert"><span>🚨 ALARME</span><button id="silence" class="primary">Silenciar</button></div>
+
+<main>
+  <section id="tab-live" class="live">
+    <div class="card">
+      <div class="card-h">
+        <h2>Ao vivo</h2>
+        <div class="seg" id="src">
+          <button data-src="auto" aria-pressed="true">Automático</button>
+          <button data-src="vigia" aria-pressed="false">Anotado</button>
+          <button data-src="raw" aria-pressed="false">Câmera</button>
+        </div>
+      </div>
+      <div class="video"><img id="video" alt="Vídeo ao vivo"><span class="note" id="vnote">Conectando…</span></div>
+      <div class="legend">
+        <span><b style="background:#3cdc3c"></b>conhecido (similaridade)</span>
+        <span><b style="background:#ffdc00"></b>? identificando</span>
+        <span><b style="background:#ff0000"></b>DESCONHECIDO</span>
+        <span><b style="background:#00c8ff"></b>porta</span>
+        <span><b style="background:#ff50b4"></b>zona sensível</span>
+        <span style="flex:1"></span>
+        <button id="test-alarm">Testar alarme</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h">
+        <h2>Eventos</h2>
+        <div class="seg" id="filter">
+          <button data-f="all" aria-pressed="true">Todos</button>
+          <button data-f="alerts" aria-pressed="false">Alertas</button>
+          <button data-f="ids" aria-pressed="false">Identificações</button>
+        </div>
+      </div>
+      <div id="feed"><div class="empty">Carregando…</div></div>
+    </div>
+  </section>
+
+  <section id="tab-people" hidden>
+    <div class="people-top">
+      <form id="add-person" class="people-top" style="margin:0">
+        <input type="text" name="name" placeholder="Nome (ex.: Ana)" maxlength="40" required>
+        <button class="primary">Adicionar pessoa</button>
+      </form>
+    </div>
+    <p class="help">
+      Para cada pessoa, use <b>Capturar pela câmera</b> com ela a ~1–2 m da câmera, olhando para a lente
+      e virando o rosto devagar para os lados (8 fotos em ~5 s). Repita com e sem óculos e com outra luz.
+      Também dá para <b>enviar fotos</b> nítidas de frente. A Nitro processa as fotos quando está ligada:
+      <span style="color:var(--ok)">✓ ok</span> entrou na galeria,
+      <span style="color:var(--warn)">⏳ pendente</span> aguardando a Nitro,
+      <span style="color:var(--bad)">✗ sem rosto</span> não serviu (pode apagar).
+    </p>
+    <div class="people" id="people"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const TITLES = { face_unknown: "Pessoa desconhecida", sensitive_zone: "Desconhecido em zona sensível",
+  unidentified: "Pessoa não identificada", face_known: "Pessoa identificada", loitering: "Permanência" };
+const S = { since: null, events: [], filter: "all", src: "auto", node: null, sound: false, tab: "live" };
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { credentials: "same-origin", ...opts });
+  if (r.status === 401) { location.href = "/login"; throw new Error("login"); }
+  if (!r.ok) { let d = r.statusText; try { d = (await r.json()).detail || d; } catch {} throw new Error(d); }
+  return r.headers.get("content-type")?.includes("json") ? r.json() : r;
+}
+const fmt = ts => new Date(ts * 1000).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+function chip(id, cls, text) { const c = $(id); c.className = "chip " + cls; c.lastElementChild.textContent = text; }
+
+// ---- estado + alarme -------------------------------------------------------
+async function pollState() {
+  try {
+    const st = await api("/api/state");
+    const n = st.node || {};
+    S.node = st.node_online;
+    chip("#c-node", st.node_online ? "ok" : "bad",
+      st.node_online ? `Nitro: ${n.fps ?? "?"} fps` : st.node_online === false ? "Nitro desligada" : "Nitro: aguardando");
+    chip("#c-cam", st.camera_online ? "ok" : st.camera_online === false ? "bad" : "", st.camera_online === false ? "Câmera sem sinal" : "Câmera ok");
+    const ppl = st.people.filter(p => p.ok > 0);
+    chip("#c-gal", ppl.length ? "ok" : "warn", ppl.length ? `Galeria: ${ppl.map(p => p.name).join(", ")}` : "Galeria vazia");
+    chip("#c-ch", st.channels.length ? "ok" : "warn", st.channels.length ? st.channels.join(" + ") : "Sem canais");
+    const a = st.alarm;
+    $("#alarm").classList.toggle("on", a.active);
+    $("#alarm span").textContent = "🚨 ALARME: " + (a.reason || "");
+    siren(a.active && S.sound);
+    updateVideo();
+  } catch (e) { if (e.message !== "login") chip("#c-node", "bad", "Hub inacessível"); }
+}
+$("#silence").onclick = () => api("/api/alarm/stop", { method: "POST" }).then(pollState);
+$("#test-alarm").onclick = () => api("/api/alarm/test", { method: "POST" }).then(pollState);
+
+let audio = null;
+function siren(on) {
+  if (on && !audio) {
+    const ctx = new AudioContext(), osc = ctx.createOscillator(), lfo = ctx.createOscillator(),
+          depth = ctx.createGain(), vol = ctx.createGain();
+    osc.type = "sawtooth"; osc.frequency.value = 950;
+    lfo.frequency.value = 0.7; depth.gain.value = 330; vol.gain.value = 0.25;
+    lfo.connect(depth).connect(osc.frequency); osc.connect(vol).connect(ctx.destination);
+    osc.start(); lfo.start(); audio = ctx;
+  } else if (!on && audio) { audio.close(); audio = null; }
+}
+$("#sound").onclick = () => {
+  S.sound = !S.sound;
+  $("#sound").textContent = S.sound ? "🔔 Som ativo" : "🔕 Ativar som";
+  if (S.sound) { const c = new AudioContext(); c.resume().then(() => c.close()); }
+  pollState();
+};
+
+// ---- vídeo -----------------------------------------------------------------
+function updateVideo() {
+  const img = $("#video");
+  if (document.hidden || S.tab !== "live") { if (img.dataset.src) { img.removeAttribute("src"); img.dataset.src = ""; } return; }
+  const src = S.src === "auto" ? (S.node ? "vigia" : "raw") : S.src;
+  $("#vnote").textContent = src === "vigia" ? "Anotado pela Nitro (detecção + reconhecimento)" :
+    S.node ? "Câmera crua (sem análise)" : "Câmera crua — Nitro desligada, sem análise";
+  if (img.dataset.src !== src) { img.dataset.src = src; img.src = `/api/live.mjpg?src=${src}&t=${Date.now()}`; }
+}
+$("#video").onerror = () => setTimeout(() => { $("#video").dataset.src = ""; updateVideo(); }, 3000);
+document.addEventListener("visibilitychange", updateVideo);
+for (const b of $("#src").children) b.onclick = () => {
+  S.src = b.dataset.src;
+  for (const x of $("#src").children) x.setAttribute("aria-pressed", x === b);
+  updateVideo();
+};
+
+// ---- eventos -----------------------------------------------------------------
+async function pollEvents() {
+  try {
+    const q = S.since === null ? "?limit=100" : `?since=${S.since}`;
+    const fresh = await api("/api/events" + q);
+    if (fresh.length) { S.since = Math.max(S.since ?? 0, ...fresh.map(e => e.received_at)); S.events = [...fresh, ...S.events].slice(0, 300); }
+    if (fresh.length || S.since === null || !$("#feed").dataset.ready) renderFeed();
+  } catch {}
+}
+function renderFeed() {
+  const feed = $("#feed"); feed.dataset.ready = "1";
+  const list = S.events.filter(e => S.filter === "all" || (S.filter === "ids" ? e.kind === "face_known" : e.severity !== "info"));
+  feed.replaceChildren(...(list.length ? list.map(evCard) : [el("div", { class: "empty" }, "Nenhum evento ainda.")]));
+}
+function evCard(e) {
+  const sim = e.meta?.similarity != null ? ` · similaridade ${e.meta.similarity}` : "";
+  const photo = e.has_photo
+    ? el("img", { src: `/api/events/${e.id}/photo.jpg`, loading: "lazy", alt: "", onclick: () => window.open(`/api/events/${e.id}/photo.jpg`) })
+    : el("div", { class: "noimg" });
+  return el("div", { class: "ev " + e.severity }, photo,
+    el("div", {}, el("div", { class: "t" }, (e.meta?.alarm ? "🔊 " : "") + (TITLES[e.kind] || e.kind)),
+      el("div", { class: "m" }, e.message), el("div", { class: "w" }, `${fmt(e.timestamp)} · ${e.camera_id}${sim}`)));
+}
+for (const b of $("#filter").children) b.onclick = () => {
+  S.filter = b.dataset.f;
+  for (const x of $("#filter").children) x.setAttribute("aria-pressed", x === b);
+  renderFeed();
+};
+
+// ---- pessoas ---------------------------------------------------------------
+const ST = { ok: "✓ ok", pending: "⏳ pendente", sem_rosto: "✗ sem rosto" };
+async function loadPeople() {
+  const { people } = await api("/api/people");
+  const box = $("#people");
+  box.replaceChildren(...(people.length ? people.map(personCard) :
+    [el("div", { class: "empty card" }, "Nenhuma pessoa cadastrada. Comece adicionando seu nome acima.")]));
+  return people;
+}
+function personCard(p) {
+  const n = s => p.photos.filter(f => f.status === s).length;
+  const msg = el("div", { class: "msg" });
+  const file = el("input", { type: "file", accept: "image/*", multiple: "", hidden: "" });
+  const cap = el("button", { class: "primary" }, "📷 Capturar pela câmera");
+  cap.onclick = async () => {
+    cap.disabled = true; msg.textContent = "Olhe para a câmera e vire o rosto devagar para os lados…";
+    try { const r = await api(`/api/people/${p.id}/capture?count=8`, { method: "POST" }); msg.textContent = `${r.added.length} foto(s) capturada(s). A Nitro vai processar em até 30 s.`; }
+    catch (e) { msg.textContent = "Falhou: " + e.message; }
+    cap.disabled = false; loadPeople();
+  };
+  file.onchange = async () => {
+    const fd = new FormData(); for (const f of file.files) fd.append("files", f);
+    msg.textContent = "Enviando…";
+    try { const r = await api(`/api/people/${p.id}/photos`, { method: "POST", body: fd }); msg.textContent = `${r.added.length} foto(s) enviada(s).`; }
+    catch (e) { msg.textContent = "Falhou: " + e.message; }
+    loadPeople();
+  };
+  const del = el("button", { class: "danger" }, "Remover pessoa");
+  del.onclick = async () => {
+    if (!confirm(`Remover ${p.name} e TODAS as fotos de cadastro? (some também da Nitro)`)) return;
+    await api(`/api/people/${p.id}`, { method: "DELETE" }); loadPeople(); pollState();
+  };
+  const photos = p.photos.map(f => {
+    const x = el("button", { class: "x", title: "Apagar foto" }, "×");
+    x.onclick = async () => { await api(`/api/faces/photos/${f.id}`, { method: "DELETE" }); loadPeople(); };
+    return el("div", { class: "ph" }, el("img", { src: `/api/faces/photos/${f.id}.jpg`, loading: "lazy", alt: "" }),
+      el("span", { class: "st " + f.status }, ST[f.status] || f.status), x);
+  });
+  return el("div", { class: "card person" },
+    el("div", { class: "card-h" }, el("h2", {}, p.name),
+      el("span", { class: "counts" }, `${n("ok")} ok · ${n("pending")} pendente(s) · ${n("sem_rosto")} sem rosto`)),
+    el("div", { class: "actions" }, cap, el("button", { onclick: () => file.click() }, "⬆ Enviar fotos"), file, del),
+    msg, el("div", { class: "photos" }, ...photos));
+}
+$("#add-person").onsubmit = async ev => {
+  ev.preventDefault();
+  const input = ev.target.elements.name;
+  try { await api("/api/people", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: input.value }) }); input.value = ""; }
+  catch (e) { alert(e.message); }
+  loadPeople();
+};
+
+// ---- abas + ciclo ------------------------------------------------------------
+for (const b of document.querySelectorAll("[data-tab]")) b.onclick = () => {
+  S.tab = b.dataset.tab;
+  for (const x of document.querySelectorAll("[data-tab]")) x.setAttribute("aria-selected", x === b);
+  $("#tab-live").hidden = S.tab !== "live"; $("#tab-people").hidden = S.tab !== "people";
+  if (S.tab === "people") loadPeople();
+  updateVideo();
+};
+setInterval(pollState, 2000);
+setInterval(pollEvents, 3000);
+setInterval(async () => {  // fotos pendentes mudam de status quando a Nitro processa
+  if (S.tab === "people" && !document.hidden) {
+    const busy = document.querySelector(".person button:disabled");
+    if (!busy && document.querySelector(".ph .st.pending")) loadPeople();
+  }
+}, 5000);
+pollState(); pollEvents();
+</script>
+</body>
+</html>

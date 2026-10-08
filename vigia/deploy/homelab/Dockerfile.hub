@@ -1,0 +1,14 @@
+FROM python:3.12-slim
+# alsa-utils: `aplay` para o alarme no alto-falante do homelab
+RUN apt-get update && apt-get install -y --no-install-recommends alsa-utils \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY deploy/homelab/requirements-hub.txt ./
+RUN pip install --no-cache-dir -r requirements-hub.txt
+COPY pyproject.toml ./
+COPY src ./src
+# --no-deps: as dependências do hub já estão acima; evita baixar ultralytics/torch.
+RUN pip install --no-cache-dir --no-deps .
+ENV PYTHONUNBUFFERED=1
+EXPOSE 8090
+CMD ["vigia", "hub", "--host", "0.0.0.0", "--port", "8090"]

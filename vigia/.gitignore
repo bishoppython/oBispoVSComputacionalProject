@@ -10,3 +10,10 @@ data/snapshots/*
 data/faces/
 *.pt
 *.onnx
+data/videos/
+data/clips/
+*.mp4
+*.avi
+*.mkv
+data/outbox/
+data/hub/

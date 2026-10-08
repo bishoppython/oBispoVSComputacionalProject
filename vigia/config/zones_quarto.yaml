@@ -1,0 +1,10 @@
+# PROVISÓRIO: a câmera ainda não enquadra a porta e a cama.
+# Depois de posicionar a câmera, redesenhe com:  vigia zones -c config/quarto.yaml
+# kind: entrance = porta (marca "entrou no quarto"); sensitive = cama (desconhecido ali -> crítico)
+zones:
+  - name: porta
+    kind: entrance
+    polygon: [[0.0, 0.25], [0.18, 0.25], [0.18, 1.0], [0.0, 1.0]]
+  - name: cama
+    kind: sensitive
+    polygon: [[0.55, 0.55], [1.0, 0.55], [1.0, 1.0], [0.55, 1.0]]

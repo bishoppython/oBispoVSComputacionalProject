@@ -1,6 +1,7 @@
 camera:
   id: frente
   # 0 = webcam | caminho de vídeo (.mp4) para testes | URL RTSP
+  # Câmera do homelab: VIGIA_CAMERA_SOURCE=rtsp://vigia:SENHA@192.168.1.108:8554/cam1 no .env
   source: 0
   # Stream de maior resolução só para snapshots (fase 5, VIGI stream1). null = usa o próprio frame.
   snapshot_source: null
@@ -28,7 +29,13 @@ events:
   snapshot_dir: data/snapshots
 
 telegram:
-  enabled: true
+  enabled: false           # o envio sai do hub no homelab (veja `hub`); true = envio direto
+
+hub:
+  enabled: true            # token em VIGIA_HUB_TOKEN (.env)
+  url: http://192.168.1.108:8090
+  heartbeat_s: 60          # o hub avisa "vigilância pausada" se parar de receber
+  outbox_dir: data/outbox  # eventos aguardando envio se o homelab estiver fora
 
 display:
   show_window: true

@@ -45,11 +45,53 @@ class LoiteringCfg(BaseModel):
 
 class EventsCfg(BaseModel):
     cooldown_s: float = 120.0
+    # Exceções por tipo, ex.: {face_known: 1800} -> "Ana identificada" no máximo a cada 30 min
+    cooldown_by_kind: dict[str, float] = {}
     snapshot_dir: Path = Path("data/snapshots")
 
 
 class TelegramCfg(BaseModel):
     enabled: bool = True
+
+
+class FaceCfg(BaseModel):
+    """Reconhecimento facial (InsightFace na GPU) + regra de identidade por track."""
+
+    enabled: bool = False
+    model: str = "buffalo_l"
+    det_size: int = 320
+    device: int | str = 0
+    match_threshold: float = 0.45
+    unknown_threshold: float = 0.30
+    known_votes: int = 3
+    unknown_votes: int = 5
+    unidentified_after_s: float = 20.0
+    min_face_px: int = 40
+    min_frontal: float = 0.3
+    sync_interval_s: float = 30.0
+    cache_path: Path = Path("data/faces/embeddings.npz")
+    # Alarme sonoro no homelab/painel para rosto desconhecido confirmado
+    alarm_on_unknown: bool = True
+
+
+class LiveCfg(BaseModel):
+    """Vídeo anotado publicado no mediamtx (URL com senha em VIGIA_LIVE_URL no .env)."""
+
+    enabled: bool = False
+    fps: float = 15.0
+    encoder: str = "h264_nvenc"  # libx264 se não houver NVIDIA
+    bitrate: str = "2M"
+
+
+class HubCfg(BaseModel):
+    """Envio dos eventos para o hub do homelab (que dispara Telegram/WhatsApp)."""
+
+    enabled: bool = False
+    url: str = "http://192.168.1.108:8090"
+    heartbeat_s: float = 60.0
+    retry_s: float = 30.0
+    timeout_s: float = 10.0
+    outbox_dir: Path = Path("data/outbox")
 
 
 class DisplayCfg(BaseModel):
@@ -63,6 +105,9 @@ class AppConfig(BaseModel):
     loitering: LoiteringCfg = LoiteringCfg()
     events: EventsCfg = EventsCfg()
     telegram: TelegramCfg = TelegramCfg()
+    hub: HubCfg = HubCfg()
+    face: FaceCfg = FaceCfg()
+    live: LiveCfg = LiveCfg()
     display: DisplayCfg = DisplayCfg()
 
 
@@ -73,6 +118,8 @@ class Secrets(BaseSettings):
     telegram_chat_id: str | None = None
     vigia_camera_source: str | None = None
     vigia_snapshot_source: str | None = None
+    vigia_hub_token: str | None = None
+    vigia_live_url: str | None = None
 
     @property
     def telegram_ready(self) -> bool:

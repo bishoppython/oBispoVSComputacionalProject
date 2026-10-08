@@ -23,16 +23,43 @@ Legenda: `[x]` feito · `[ ]` a fazer. Cada fase tem critério de aceite.
 
 **Aceite:** pessoa parada 60 s no portão gera **um** alerta com foto; passagem normal não gera nada.
 
-## Fase 2 — Reconhecimento facial
-- [ ] `docker compose --profile face up -d` (pgvector) + migração da tabela `faces`
-- [ ] `InsightFaceEncoder` (implementa `FaceEncoder`) com `buffalo_l`, recorte a partir da caixa da pessoa
-- [ ] Filtro de qualidade: rosto >= 80 px, nitidez (variância do Laplaciano), pose frontal
-- [ ] `PgVectorGallery` (implementa `FaceGallery`), similaridade de cosseno
-- [ ] CLI `vigia faces add <nome> <pasta>`, `vigia faces list`, `vigia faces remove <nome>`
-- [ ] Associar identidade ao `track_id` (votação em N frames, não em 1)
-- [ ] Pessoa conhecida -> suprime alertas de permanência dela; evento opcional "Fulano chegou"
+## Fase 1.5 — Nó de inferência + hub no homelab
+Câmera USB no homelab (sempre ligado), inferência na Nitro V15 (liga/desliga),
+alertas e relatórios saindo do homelab.
+- [x] `mediamtx` + `ffmpeg` no homelab publicando a webcam em `rtsp://homelab:8554/frente`
+- [x] `HubSink` na Nitro: fila em disco (`data/outbox/`), reenvio e heartbeat
+- [x] `vigia hub` (FastAPI): recebe eventos, guarda em SQLite + fotos, evita duplicados
+- [x] Telegram pelo hub (reusa `TelegramClient`)
+- [x] WhatsApp via Evolution API (instância do número novo)
+- [x] Aviso de "vigilância pausada/retomada" (Nitro) e "câmera sem sinal" (mediamtx)
+- [x] Relatório mensal em PDF com fotos (dia 1º) + `POST /reports/monthly`
+- [x] Retenção automática de fotos/eventos (`HUB_RETENTION_DAYS`)
+- [ ] Parear o número novo na Evolution API e validar o envio
+- [x] Iniciar `vigia run` automaticamente quando a Nitro liga (`deploy/nitro/install-service.sh`)
+
+**Aceite:** com a Nitro ligada, um alerta chega no Telegram e no WhatsApp com foto; com a
+Nitro desligada, chega um único aviso de "vigilância pausada"; no dia 1º chega o PDF do mês.
+
+## Fase 2 — Reconhecimento facial (teste no quarto: `config/quarto.yaml`)
+Porta = `entrance`, cama = `sensitive`. Família reconhecida = evento informativo;
+rosto desconhecido confirmado = alerta crítico + sirene (homelab + painel);
+sem rosto reconhecível por 20 s = alerta leve.
+- [x] `InsightFaceEncoder` (implementa `FaceEncoder`) com `buffalo_l` na GPU, recorte da caixa da pessoa
+- [x] Filtro de qualidade: tamanho mínimo, nitidez (variância do Laplaciano), pose frontal
+- [x] Galeria: fotos no hub (painel/CLI), embeddings calculados e cacheados na Nitro
+      (`MemoryGallery`; pgvector dispensado para poucas pessoas)
+- [x] CLI `vigia faces add <nome> <pasta>`, `vigia faces list`, `vigia faces remove <nome>`
+- [x] `IdentityTracker`: votação em N frames, zona cinzenta, herança de identidade na troca de ID
+- [x] Evento "Fulano entrou no quarto" (porta) / "identificado"; desconhecido na cama = crítico
+- [x] Alarme sonoro: sirene no alto-falante do homelab + no painel (botão Silenciar)
+- [x] Painel web no hub: vídeo anotado ao vivo, feed de alertas/identificações, cadastro
+      (captura pela câmera, upload, remoção), login por senha
+- [x] RTSP do mediamtx com senha (o vídeo do quarto não fica aberto na rede)
+- [ ] Posicionar a câmera e redesenhar `porta`/`cama` (`vigia zones -c config/quarto.yaml`)
+- [ ] Cadastrar as 4 pessoas (8+ fotos boas cada) e validar: cada um reconhecido, visita = alarme
+- [ ] Calibrar `match_threshold`/`unknown_threshold` com as similaridades vistas no painel
+- [ ] Pessoa conhecida -> suprime alertas de permanência dela (quando voltar ao portão)
 - [ ] Bot do Telegram com botões inline: "Conheço", "Falso alarme", "Cadastrar como…"
-- [ ] Calibrar limiar de similaridade com as suas fotos (curva de falsos aceites/rejeições)
 
 **Aceite:** pessoas cadastradas são reconhecidas a ~2–3 m de frente; desconhecidos nunca recebem nome.
 

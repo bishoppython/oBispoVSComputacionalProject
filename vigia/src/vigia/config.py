@@ -52,6 +52,17 @@ class TelegramCfg(BaseModel):
     enabled: bool = True
 
 
+class HubCfg(BaseModel):
+    """Envio dos eventos para o hub do homelab (que dispara Telegram/WhatsApp)."""
+
+    enabled: bool = False
+    url: str = "http://192.168.1.108:8090"
+    heartbeat_s: float = 60.0
+    retry_s: float = 30.0
+    timeout_s: float = 10.0
+    outbox_dir: Path = Path("data/outbox")
+
+
 class DisplayCfg(BaseModel):
     show_window: bool = True
 
@@ -63,6 +74,7 @@ class AppConfig(BaseModel):
     loitering: LoiteringCfg = LoiteringCfg()
     events: EventsCfg = EventsCfg()
     telegram: TelegramCfg = TelegramCfg()
+    hub: HubCfg = HubCfg()
     display: DisplayCfg = DisplayCfg()
 
 
@@ -73,6 +85,7 @@ class Secrets(BaseSettings):
     telegram_chat_id: str | None = None
     vigia_camera_source: str | None = None
     vigia_snapshot_source: str | None = None
+    vigia_hub_token: str | None = None
 
     @property
     def telegram_ready(self) -> bool:

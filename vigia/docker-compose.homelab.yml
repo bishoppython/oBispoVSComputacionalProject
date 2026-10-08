@@ -1,0 +1,35 @@
+# Homelab: câmera USB -> RTSP (mediamtx) + hub de alertas/relatórios.
+# A inferência roda na Nitro, lendo rtsp://192.168.1.108:8554/frente.
+#   docker compose -f docker-compose.homelab.yml up -d --build
+name: vigia
+services:
+  camera:
+    image: bluenviron/mediamtx:1.21.1-ffmpeg
+    container_name: vigia-camera
+    restart: unless-stopped
+    devices:
+      # Caminho estável da webcam (não muda se o /dev/videoN mudar). Defina no .env.
+      - ${VIGIA_CAMERA_DEVICE:?defina VIGIA_CAMERA_DEVICE no .env}:/dev/video0
+    volumes:
+      - ./deploy/homelab/mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      - "8554:8554"
+
+  hub:
+    build:
+      context: .
+      dockerfile: deploy/homelab/Dockerfile.hub
+    image: vigia-hub
+    container_name: vigia-hub
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HUB_MEDIAMTX_API: http://camera:9997
+      HUB_DATA_DIR: /app/data/hub
+      TZ: ${VIGIA_TZ:-America/Sao_Paulo}  # o host está em UTC; alertas e relatórios em hora local
+    volumes:
+      - ./data/hub:/app/data/hub
+    ports:
+      - "8090:8090"
+    depends_on:
+      - camera

@@ -1,0 +1,13 @@
+# Dependências do hub (sem ultralytics/torch: o homelab não faz inferência).
+numpy>=1.26
+opencv-python-headless>=4.9
+pydantic>=2.6
+pydantic-settings>=2.2
+pyyaml>=6.0
+httpx>=0.27
+typer>=0.12
+rich>=13.7
+fastapi>=0.115
+uvicorn>=0.30
+python-multipart>=0.0.9
+fpdf2>=2.8

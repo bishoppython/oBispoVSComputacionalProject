@@ -12,6 +12,7 @@ from vigia.detection.detector import Detection, Detector
 from vigia.events.engine import EventEngine, EventSink
 from vigia.events.models import Event
 from vigia.events.sinks import LogSink, SnapshotSink
+from vigia.notify.hub import HubClient, HubSink, Outbox
 from vigia.notify.telegram import TelegramClient, TelegramNotifier
 from vigia.rules.loitering import LoiteringTracker
 from vigia.rules.occupancy import OccupancyTracker
@@ -21,11 +22,14 @@ from vigia.viz.overlay import draw_detections, draw_hud, draw_zones
 
 log = logging.getLogger(__name__)
 WINDOW = "vigia"
+CAMERA_STALE_S = 10.0  # sem frame novo por mais que isso -> câmera sem sinal
 
 
 class Pipeline:
     def __init__(self, cfg: AppConfig, secrets: Secrets):
         self.cfg = cfg
+        self._fps = 0.0
+        self._last_frame_at = 0.0
         self.source = VideoSource(cfg.camera.source, cfg.camera.id, cfg.camera.reconnect_seconds)
         self.detector = Detector(cfg.detector)
         self.zones = load_zones(cfg.zones_file)
@@ -57,7 +61,31 @@ class Pipeline:
                 sinks.append(TelegramNotifier(client))
             else:
                 log.warning("Telegram habilitado, mas TELEGRAM_BOT_TOKEN/CHAT_ID ausentes no .env")
+        if self.cfg.hub.enabled:
+            if secrets.vigia_hub_token:
+                hub = self.cfg.hub
+                client = HubClient(hub.url, secrets.vigia_hub_token, hub.timeout_s)
+                sinks.append(
+                    HubSink(
+                        client,
+                        Outbox(hub.outbox_dir),
+                        heartbeat_s=hub.heartbeat_s,
+                        retry_s=hub.retry_s,
+                        status_fn=self.status,
+                    )
+                )
+            else:
+                log.warning("Hub habilitado, mas VIGIA_HUB_TOKEN ausente no .env")
         return sinks
+
+    def status(self) -> dict:
+        """Estado enviado no heartbeat ao hub."""
+        age = time.monotonic() - self._last_frame_at
+        return {
+            "camera_id": self.cfg.camera.id,
+            "camera_ok": self._last_frame_at > 0 and age < CAMERA_STALE_S,
+            "fps": round(self._fps, 1),
+        }
 
     # ------------------------------------------------------------------
     def _loitering_step(self, frame, dets: list[Detection], now: float) -> None:
@@ -133,7 +161,7 @@ class Pipeline:
     def run(self) -> None:
         show = self.cfg.display.show_window
         self.source.start()
-        fps, last = 0.0, time.monotonic()
+        last = time.monotonic()
         log.info("Pipeline iniciado (q para sair).")
         try:
             while True:
@@ -142,6 +170,7 @@ class Pipeline:
                     if self.source.ended:
                         break
                     continue
+                self._last_frame_at = time.monotonic()
                 frame = resize_to_width(frame, self.cfg.camera.width)
                 dets = self.detector.track(frame)
 
@@ -150,13 +179,13 @@ class Pipeline:
                 # fase 2: self._face_step(...)   fase 3: self._door_step / _vehicle_step
 
                 now = time.monotonic()
-                fps = 0.9 * fps + 0.1 * (1.0 / max(now - last, 1e-6))
+                self._fps = 0.9 * self._fps + 0.1 * (1.0 / max(now - last, 1e-6))
                 last = now
 
                 if show:
                     view = draw_zones(frame, self.zones)
                     view = draw_detections(view, dets, labels=self._dwell_labels(dets))
-                    cv2.imshow(WINDOW, draw_hud(view, fps, self.cfg.camera.id))
+                    cv2.imshow(WINDOW, draw_hud(view, self._fps, self.cfg.camera.id))
                     if cv2.waitKey(1) & 0xFF == ord("q"):
                         break
         except KeyboardInterrupt:

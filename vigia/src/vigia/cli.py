@@ -1,4 +1,4 @@
-"""CLI do Vigia:  vigia run | zones | probe | telegram-test"""
+"""CLI do Vigia:  vigia run | zones | probe | telegram-test | hub"""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ def _logging(verbose: bool) -> None:
         format="%(message)s",
         handlers=[RichHandler(rich_tracebacks=True, show_path=False)],
     )
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # não logar cada heartbeat
 
 
 @app.command()
@@ -122,6 +123,29 @@ def telegram_test(config: Path = CONFIG) -> None:
     client.send_photo(img, format_caption(event))
     client.close()
     typer.echo("Enviado ✅")
+
+
+@app.command()
+def hub(
+    host: str = typer.Option("0.0.0.0", help="Endereço de escuta"),
+    port: int = typer.Option(8090, help="Porta HTTP"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Roda o hub do homelab: recebe eventos e envia Telegram/WhatsApp/relatórios."""
+    _logging(verbose)
+    import uvicorn
+
+    from vigia.hub.app import create_app
+    from vigia.hub.service import build_hub
+    from vigia.hub.settings import HubSettings
+
+    settings = HubSettings()
+    uvicorn.run(
+        create_app(build_hub(settings), settings.vigia_hub_token),
+        host=host,
+        port=port,
+        log_config=None,  # usa o RichHandler já configurado
+    )
 
 
 if __name__ == "__main__":

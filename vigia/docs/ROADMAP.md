@@ -23,6 +23,23 @@ Legenda: `[x]` feito · `[ ]` a fazer. Cada fase tem critério de aceite.
 
 **Aceite:** pessoa parada 60 s no portão gera **um** alerta com foto; passagem normal não gera nada.
 
+## Fase 1.5 — Nó de inferência + hub no homelab
+Câmera USB no homelab (sempre ligado), inferência na Nitro V15 (liga/desliga),
+alertas e relatórios saindo do homelab.
+- [x] `mediamtx` + `ffmpeg` no homelab publicando a webcam em `rtsp://homelab:8554/frente`
+- [x] `HubSink` na Nitro: fila em disco (`data/outbox/`), reenvio e heartbeat
+- [x] `vigia hub` (FastAPI): recebe eventos, guarda em SQLite + fotos, evita duplicados
+- [x] Telegram pelo hub (reusa `TelegramClient`)
+- [x] WhatsApp via Evolution API (instância do número novo)
+- [x] Aviso de "vigilância pausada/retomada" (Nitro) e "câmera sem sinal" (mediamtx)
+- [x] Relatório mensal em PDF com fotos (dia 1º) + `POST /reports/monthly`
+- [x] Retenção automática de fotos/eventos (`HUB_RETENTION_DAYS`)
+- [ ] Parear o número novo na Evolution API e validar o envio
+- [x] Iniciar `vigia run` automaticamente quando a Nitro liga (`deploy/nitro/install-service.sh`)
+
+**Aceite:** com a Nitro ligada, um alerta chega no Telegram e no WhatsApp com foto; com a
+Nitro desligada, chega um único aviso de "vigilância pausada"; no dia 1º chega o PDF do mês.
+
 ## Fase 2 — Reconhecimento facial
 - [ ] `docker compose --profile face up -d` (pgvector) + migração da tabela `faces`
 - [ ] `InsightFaceEncoder` (implementa `FaceEncoder`) com `buffalo_l`, recorte a partir da caixa da pessoa

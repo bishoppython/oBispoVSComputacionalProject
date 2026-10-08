@@ -15,3 +15,5 @@ data/clips/
 *.mp4
 *.avi
 *.mkv
+data/outbox/
+data/hub/

@@ -1,0 +1,39 @@
+# mediamtx: publica a webcam USB do homelab em rtsp://<homelab>:8554/frente
+logLevel: info
+
+rtspAddress: :8554
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+
+api: yes
+apiAddress: :9997   # não é publicada no host; só o hub (rede do compose) acessa
+
+authInternalUsers:
+  # Só o ffmpeg de dentro do container publica; qualquer máquina da LAN pode ler.
+  - user: any
+    pass:
+    ips: ["127.0.0.1", "::1"]
+    permissions:
+      - action: publish
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: read
+  - user: any
+    pass:
+    ips: ["127.0.0.1", "::1", "172.16.0.0/12"]
+    permissions:
+      - action: api
+
+paths:
+  frente:
+    # MJPEG 1280x720 da webcam -> H.264 leve (a análise na Nitro usa 1280 px de largura).
+    runOnInit: >-
+      ffmpeg -hide_banner -loglevel warning
+      -f v4l2 -input_format mjpeg -video_size 1280x720 -framerate 15 -i /dev/video0
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 30 -b:v 3M
+      -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes

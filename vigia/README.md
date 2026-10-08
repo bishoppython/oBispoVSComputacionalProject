@@ -25,6 +25,19 @@ vigia run
 vigia run -s data/videos/pessoa_parada.mp4
 ```
 
+## Homelab (câmera + hub) e Nitro (inferência)
+```bash
+# no homelab, em ~/projetos/vigia (com o .env preenchido)
+docker compose -f docker-compose.homelab.yml up -d --build
+curl http://192.168.1.108:8090/health
+
+# na Nitro (.env com VIGIA_HUB_TOKEN e VIGIA_CAMERA_SOURCE=rtsp://192.168.1.108:8554/frente)
+vigia run --no-window                      # manual, ou como serviço (sobe no boot):
+bash deploy/nitro/install-service.sh       # logs: journalctl --user -u vigia -f
+```
+Rotas do hub (com `Authorization: Bearer $VIGIA_HUB_TOKEN`): `POST /notify/test`,
+`POST /reports/monthly?month=AAAA-MM`. Sem token: `GET /health`.
+
 ## Documentação
 - `CLAUDE.md` — contexto para o Claude Code (arquitetura, convenções, comandos)
 - `docs/ROADMAP.md` — fases, checklist e critérios de aceite
